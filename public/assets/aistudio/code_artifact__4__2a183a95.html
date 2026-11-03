@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스피드 두더지 잡기 (숫자 키패드)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti for Game Over Highscore celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Jua', 'Nunito', sans-serif;
+            background: linear-gradient(135deg, #1e1b4b 0%, #311042 50%, #450a0a 100%);
+            touch-action: manipulation;
+        }
+
+        /* 3D Glassmorphism Cards */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Mole Hole Styles */
+        .mole-hole {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1.5rem;
+            background: radial-gradient(circle, #3a2215 0%, #1a0d07 100%);
+            box-shadow: inset 0 10px 20px rgba(0,0,0,0.8), 0 4px 10px rgba(0,0,0,0.5);
+            border: 3px solid #5c3a21;
+        }
+
+        /* Hole Dirt Ring */
+        .mole-hole::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 35%;
+            background: repeating-linear-gradient(
+                45deg,
+                #422513,
+                #422513 10px,
+                #2d190d 10px,
+                #2d190d 20px
+            );
+            border-radius: 0 0 1.2rem 1.2rem;
+            z-index: 20;
+            border-top: 4px solid #5c3a21;
+            pointer-events: none;
+        }
+
+        /* Mole Character Base */
+        .mole {
+            position: absolute;
+            bottom: -100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 85%;
+            transition: bottom 0.08s cubic-bezier(0.175, 0.885, 0.32, 1.27);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        .mole.up {
+            bottom: 10%;
+        }
+
+        /* Key Indicator Badge */
+        .key-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 30;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fbbf24;
+            font-family: 'Nunito', sans-serif;
+            font-weight: 900;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        /* Active key feedback */
+        .mole-hole.active-key {
+            border-color: #f59e0b;
+            box-shadow: 0 0 25px #f59e0b, inset 0 0 15px #f59e0b;
+            transform: scale(0.97);
+        }
+
+        /* Hit Effect Animation */
+        @keyframes hitPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3) rotate(10deg); }
+            100% { transform: scale(0); }
+        }
+
+        .hit-effect {
+            animation: hitPop 0.2s forwards;
+        }
+
+        /* Shake Effect on Wrong Hit / Miss */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .shake-screen {
+            animation: shake 0.2s ease-in-out;
+        }
+
+        /* Floating Score Text */
+        .float-text {
+            position: absolute;
+            font-weight: 900;
+            font-size: 1.8rem;
+            z-index: 40;
+            pointer-events: none;
+            animation: floatUp 0.6s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-40px) scale(1.4); }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-white flex flex-col items-center justify-between p-3 sm:p-6 select-none overflow-x-hidden">
+
+    <!-- Header / Title -->
+    <header class="w-full max-w-lg text-center mb-2">
+        <h1 class="text-4xl sm:text-5xl font-extrabold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 drop-shadow-lg">
+            ⚡ 초스피드 두더지
+        </h1>
+        <p class="text-xs sm:text-sm text-gray-300 mt-1">
+            키패드 <span class="bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">789 / 456 / 123</span> 또는 화면 터치!
+        </p>
+    </header>
+
+    <!-- Main Game Container -->
+    <main id="game-container" class="w-full max-w-lg flex flex-col items-center gap-4 my-auto">
+
+        <!-- Scoreboard & Stats -->
+        <div class="w-full glass-panel rounded-2xl p-4 flex justify-between items-center shadow-2xl">
+            <!-- Score -->
+            <div class="flex flex-col items-center">
+                <span class="text-xs text-gray-400 uppercase tracking-widest">SCORE</span>
+                <span id="score-display" class="text-3xl sm:text-4xl font-black text-yellow-400 tracking-wider">0</span>
+            </div>
+
+            <!-- Combo Multiplier -->
+            <div class="flex flex-col items-center">
+                <span class="text-xs text-gray-400 uppercase tracking-widest">COMBO</span>
+                <div class="flex items-center">
+                    <span id="combo-display" class="text-2xl sm:text-3xl font-black text-orange-400">0</span>
+                    <span class="text-xs text-orange-400 ml-0.5">x</span>
+                </div>
+            </div>
+
+            <!-- Life Hearts Display -->
+            <div class="flex flex-col items-center">
+                <span class="text-xs text-gray-400 uppercase tracking-widest">LIVES</span>
+                <div id="lives-display" class="text-2xl sm:text-3xl flex gap-1 text-red-500">
+                    <i class="fa-solid fa-heart"></i>
+                    <i class="fa-solid fa-heart"></i>
+                    <i class="fa-solid fa-heart"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Combo Bar -->
+        <div class="w-full bg-gray-900/60 rounded-full h-2.5 overflow-hidden border border-gray-700/50">
+            <div id="combo-bar" class="bg-gradient-to-r from-yellow-500 to-red-500 h-full w-0 transition-all duration-150"></div>
+        </div>
+
+        <!-- 3x3 Mole Grid (Array mapping: 789 top row, 456 middle row, 123 bottom row) -->
+        <div class="w-full aspect-square grid grid-cols-3 gap-3 sm:gap-4 p-3 glass-panel rounded-3xl relative">
+            
+            <!-- Row 1: Keypad 7, 8, 9 -->
+            <div class="mole-hole cursor-pointer" data-key="7" onclick="handleHoleClick(7)">
+                <div class="key-badge">7</div>
+                <div class="mole" id="mole-7"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="8" onclick="handleHoleClick(8)">
+                <div class="key-badge">8</div>
+                <div class="mole" id="mole-8"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="9" onclick="handleHoleClick(9)">
+                <div class="key-badge">9</div>
+                <div class="mole" id="mole-9"></div>
+            </div>
+
+            <!-- Row 2: Keypad 4, 5, 6 -->
+            <div class="mole-hole cursor-pointer" data-key="4" onclick="handleHoleClick(4)">
+                <div class="key-badge">4</div>
+                <div class="mole" id="mole-4"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="5" onclick="handleHoleClick(5)">
+                <div class="key-badge">5</div>
+                <div class="mole" id="mole-5"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="6" onclick="handleHoleClick(6)">
+                <div class="key-badge">6</div>
+                <div class="mole" id="mole-6"></div>
+            </div>
+
+            <!-- Row 3: Keypad 1, 2, 3 -->
+            <div class="mole-hole cursor-pointer" data-key="1" onclick="handleHoleClick(1)">
+                <div class="key-badge">1</div>
+                <div class="mole" id="mole-1"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="2" onclick="handleHoleClick(2)">
+                <div class="key-badge">2</div>
+                <div class="mole" id="mole-2"></div>
+            </div>
+            <div class="mole-hole cursor-pointer" data-key="3" onclick="handleHoleClick(3)">
+                <div class="key-badge">3</div>
+                <div class="mole" id="mole-3"></div>
+            </div>
+
+        </div>
+
+        <!-- Game Controls & Mode Selection -->
+        <div class="w-full flex justify-between items-center gap-3">
+            <button id="start-btn" onclick="startGame()" class="flex-1 py-3.5 px-6 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-black text-xl rounded-2xl shadow-lg shadow-green-900/40 transform active:scale-95 transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-play"></i> 게임 시작
+            </button>
+            <button onclick="toggleSound()" id="sound-btn" class="p-3.5 bg-gray-800/80 hover:bg-gray-700 text-yellow-400 rounded-2xl border border-gray-600/50 shadow-md transform active:scale-95 transition">
+                <i class="fa-solid fa-volume-high text-xl" id="sound-icon"></i>
+            </button>
+        </div>
+    </main>
+
+    <!-- Footer Guide -->
+    <footer class="w-full max-w-lg text-center mt-3 text-xs text-gray-400">
+        <p>💡 <b>무한 서바이벌 모드:</b> 두더지를 칠 때마다 속도 UP! 목숨 ❤️ 3개가 깎이면 게임 오버!</p>
+        <p class="mt-1">최고 기록: <span id="highscore-display" class="text-yellow-400 font-bold">0</span>점</p>
+    </footer>
+
+    <!-- Game Over Modal -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-panel max-w-sm w-full rounded-3xl p-6 text-center shadow-2xl border border-yellow-500/30 transform transition-all scale-95 opacity-0" id="modal-content">
+            <div class="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-orange-500 rounded-2xl mx-auto flex items-center justify-center text-3xl text-gray-900 shadow-lg mb-4">
+                🏆
+            </div>
+            <h2 class="text-3xl font-black text-white mb-1">게임 종료!</h2>
+            <p id="new-record-tag" class="text-xs font-bold text-yellow-400 tracking-wider mb-4 hidden">🎉 최고 기록 경신! 🎉</p>
+            
+            <div class="bg-gray-900/80 rounded-2xl p-4 mb-5 border border-gray-800 flex flex-col gap-2">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-400">최종 점수</span>
+                    <span id="final-score" class="text-2xl font-black text-yellow-400">0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-400">버틴 시간</span>
+                    <span id="survived-time" class="text-lg font-bold text-cyan-400">0초</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-400">최대 연속 콤보</span>
+                    <span id="max-combo" class="text-lg font-bold text-orange-400">0x</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-gray-400">명중률</span>
+                    <span id="accuracy-display" class="text-lg font-bold text-green-400">0%</span>
+                </div>
+            </div>
+
+            <button onclick="closeModal(); startGame();" class="w-full py-3.5 bg-gradient-to-r from-yellow-500 to-amber-600 text-gray-950 font-black text-lg rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition">
+                다시 도전하기
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // Web Audio API Engine for Sound Effects
+        let audioCtx = null;
+        let isMuted = false;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioCtx = new AudioContext();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function toggleSound() {
+            isMuted = !isMuted;
+            const icon = document.getElementById('sound-icon');
+            if (isMuted) {
+                icon.className = 'fa-solid fa-volume-xmark text-xl text-red-400';
+            } else {
+                icon.className = 'fa-solid fa-volume-high text-xl text-yellow-400';
+            }
+        }
+
+        function playSound(type) {
+            if (isMuted || !audioCtx) return;
+
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                const now = audioCtx.currentTime;
+
+                if (type === 'hit') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'gold') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now); // C5
+                    osc.frequency.setValueAtTime(659.25, now + 0.06); // E5
+                    osc.frequency.setValueAtTime(783.99, now + 0.12); // G5
+                    osc.frequency.setValueAtTime(1046.50, now + 0.18); // C6
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'bomb') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.25);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'miss') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(220, now);
+                    osc.frequency.linearRampToValueAtTime(110, now + 0.12);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (type === 'over') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(80, now + 0.5);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // Mole Types Definitions with Custom Vector SVGs
+        const MOLE_TYPES = {
+            NORMAL: {
+                points: 100,
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">
+                        <ellipse cx="50" cy="55" rx="38" ry="40" fill="#8B4513"/>
+                        <ellipse cx="50" cy="65" rx="24" ry="22" fill="#D2B48C"/>
+                        <circle cx="36" cy="42" r="6" fill="#000"/><circle cx="38" cy="40" r="2" fill="#FFF"/>
+                        <circle cx="64" cy="42" r="6" fill="#000"/><circle cx="66" cy="40" r="2" fill="#FFF"/>
+                        <ellipse cx="50" cy="50" rx="8" ry="6" fill="#FFC0CB"/>
+                        <path d="M 45 54 Q 50 59 55 54" stroke="#000" stroke-width="2" fill="none"/>
+                      </svg>`
+            },
+            SPEED: {
+                points: 200,
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full drop-shadow-md">
+                        <ellipse cx="50" cy="55" rx="38" ry="40" fill="#374151"/>
+                        <rect x="16" y="32" width="68" height="18" rx="6" fill="#EF4444"/>
+                        <ellipse cx="36" cy="41" rx="5" ry="6" fill="#FFF"/>
+                        <ellipse cx="64" cy="41" rx="5" ry="6" fill="#FFF"/>
+                        <circle cx="36" cy="41" r="3" fill="#000"/>
+                        <circle cx="64" cy="41" r="3" fill="#000"/>
+                        <path d="M 44 60 Q 50 66 56 60" stroke="#FFF" stroke-width="2" fill="none"/>
+                      </svg>`
+            },
+            GOLD: {
+                points: 300,
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full fill-current drop-shadow-lg">
+                        <ellipse cx="50" cy="55" rx="38" ry="40" fill="#F59E0B"/>
+                        <ellipse cx="50" cy="65" rx="24" ry="22" fill="#FEF08A"/>
+                        <polygon points="50,12 55,24 68,24 58,32 62,44 50,36 38,44 42,32 32,24 45,24" fill="#FBBF24" stroke="#D97706" stroke-width="2"/>
+                        <circle cx="36" cy="46" r="6" fill="#000"/><circle cx="38" cy="44" r="2" fill="#FFF"/>
+                        <circle cx="64" cy="46" r="6" fill="#000"/><circle cx="66" cy="44" r="2" fill="#FFF"/>
+                        <ellipse cx="50" cy="54" rx="8" ry="6" fill="#F472B6"/>
+                      </svg>`
+            },
+            BOMB: {
+                points: -200,
+                svg: `<svg viewBox="0 0 100 100" class="w-full h-full">
+                        <circle cx="50" cy="58" r="36" fill="#111827"/>
+                        <circle cx="38" cy="48" r="5" fill="#EF4444"/>
+                        <circle cx="62" cy="48" r="5" fill="#EF4444"/>
+                        <path d="M 36 68 Q 50 56 64 68" stroke="#EF4444" stroke-width="4" fill="none"/>
+                        <path d="M 50 22 Q 62 10 72 16" stroke="#D97706" stroke-width="4" fill="none"/>
+                        <circle cx="72" cy="16" r="5" fill="#F59E0B"/>
+                      </svg>`
+            }
+        };
+
+        // Game State Variables
+        let score = 0;
+
+        // Game State Variables
+        let score = 0;
+        let combo = 0;
+        let maxCombo = 0;
+        let totalHits = 0;
+        let totalClicks = 0;
+        let lives = 3;
+        let startTime = 0;
+        let survivedTime = 0;
+        let speedLevel = 1; // Speed multiplier that increases progressively
+        let isPlaying = false;
+        let moleTimers = {};
+        let activeMoles = {}; // Key mapping for active moles
+        let highscore = parseInt(localStorage.getItem('whack_mole_highscore') || '0');
+
+        // Render Highscore on startup
+        document.getElementById('highscore-display').innerText = highscore;
+
+        // Keypad Mapping Definitions
+        const KEY_PADS = [7, 8, 9, 4, 5, 6, 1, 2, 3];
+
+        // Global Keyboard Event Listener
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying) return;
+
+            let keyNum = null;
+            if (e.code.startsWith('Numpad') && e.code.length === 7) {
+                keyNum = parseInt(e.code.replace('Numpad', ''));
+            } else if (e.key >= '1' && e.key <= '9') {
+                keyNum = parseInt(e.key);
+            }
+
+            if (keyNum && KEY_PADS.includes(keyNum)) {
+                e.preventDefault();
+                triggerHoleHit(keyNum);
+            }
+        });
+
+        // Start / Reset Game
+        function startGame() {
+            initAudio();
+            if (isPlaying) return;
+
+            // Reset States
+            score = 0;
+            combo = 0;
+            maxCombo = 0;
+            totalHits = 0;
+            totalClicks = 0;
+            lives = 3;
+            speedLevel = 1;
+            startTime = Date.now();
+            isPlaying = true;
+            activeMoles = {};
+
+            // Clear Grid Moles
+            KEY_PADS.forEach(key => {
+                const moleEl = document.getElementById(`mole-${key}`);
+                moleEl.classList.remove('up');
+                moleEl.innerHTML = '';
+            });
+
+            // Update UI
+            updateUI();
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('start-btn').classList.add('opacity-50', 'cursor-not-allowed');
+
+            // Start Spawning Moles Loop
+            spawnController();
+        }
+
+        // Dynamic Mole Spawner (Speed ramps up exponentially!)
+        function spawnController() {
+            if (!isPlaying) return;
+
+            // Increase speed level slightly with time & score
+            speedLevel += 0.03;
+
+            // Spawning interval gets faster and faster (Minimum 120ms spawn delay)
+            const spawnInterval = Math.max(120, 500 / Math.pow(speedLevel, 0.6));
+
+            // Pop out mole
+            popRandomMole();
+
+            // Next spawn schedule
+            const nextSpawn = setTimeout(spawnController, spawnInterval);
+            moleTimers['spawner'] = nextSpawn;
+        }
+
+        function popRandomMole() {
+            // Select empty hole
+            const availableKeys = KEY_PADS.filter(k => !activeMoles[k]);
+            if (availableKeys.length === 0) return;
+
+            const key = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+            const moleEl = document.getElementById(`mole-${key}`);
+
+            // Determine Mole Type
+            const rand = Math.random();
+            let type = MOLE_TYPES.NORMAL;
+            let typeName = 'NORMAL';
+
+            if (rand < 0.18) {
+                type = MOLE_TYPES.BOMB;
+                typeName = 'BOMB';
+            } else if (rand < 0.38) {
+                type = MOLE_TYPES.SPEED;
+                typeName = 'SPEED';
+            } else if (rand < 0.52) {
+                type = MOLE_TYPES.GOLD;
+                typeName = 'GOLD';
+            }
+
+            // Set Mole Graphic
+            moleEl.innerHTML = type.svg;
+            moleEl.classList.add('up');
+
+            // Store active state
+            activeMoles[key] = {
+                type: typeName,
+                points: type.points,
+                el: moleEl
+            };
+
+            // Duration mole stays up (Gets EXTREMELY fast as speedLevel grows)
+            let stayDuration = Math.max(220, 750 / Math.pow(speedLevel, 0.75));
+            if (typeName === 'SPEED') stayDuration *= 0.55; // Ninja mole is hyper fast
+
+            // Auto retract timer
+            moleTimers[key] = setTimeout(() => {
+                // If normal, gold, or speed mole disappears without hit -> Lose life!
+                if (activeMoles[key] && activeMoles[key].type !== 'BOMB') {
+                    loseLife();
+                }
+                retractMole(key);
+            }, stayDuration);
+        }
+
+        function loseLife() {
+            if (!isPlaying) return;
+            lives--;
+            playSound('miss');
+            combo = 0;
+            document.getElementById('game-container').classList.add('shake-screen');
+            setTimeout(() => document.getElementById('game-container').classList.remove('shake-screen'), 200);
+            updateUI();
+
+            if (lives <= 0) {
+                endGame();
+            }
+        }
+
+        function retractMole(key) {
+            if (activeMoles[key]) {
+                const moleObj = activeMoles[key];
+                moleObj.el.classList.remove('up');
+                delete activeMoles[key];
+                if (moleTimers[key]) clearTimeout(moleTimers[key]);
+            }
+        }
+
+        // Handle Player Input (Click or Key Press)
+        function handleHoleClick(key) {
+            if (!isPlaying) return;
+            triggerHoleHit(key);
+        }
+
+        function triggerHoleHit(key) {
+            totalClicks++;
+
+            // Visual feedback on hole
+            const hole = document.querySelector(`.mole-hole[data-key="${key}"]`);
+            hole.classList.add('active-key');
+            setTimeout(() => hole.classList.remove('active-key'), 100);
+
+            // Check if mole exists at key
+            if (activeMoles[key]) {
+                const moleObj = activeMoles[key];
+                totalHits++;
+
+                if (moleObj.type === 'BOMB') {
+                    // Hit Bomb -> Lose Life & Big Penalty
+                    playSound('bomb');
+                    combo = 0;
+                    loseLife();
+                    showFloatingText(hole, '-❤️ 폭탄!', 'text-red-500');
+                } else {
+                    // Hit Valid Mole!
+                    combo++;
+                    if (combo > maxCombo) maxCombo = combo;
+
+                    // Speed ramps up on every successful hit
+                    speedLevel += 0.02;
+
+                    // Combo Multiplier calculation
+                    const multiplier = 1 + Math.floor(combo / 5) * 0.5;
+                    const gainedPoints = Math.round(moleObj.points * multiplier);
+                    score += gainedPoints;
+
+                    if (moleObj.type === 'GOLD') playSound('gold');
+                    else playSound('hit');
+
+                    const colorClass = moleObj.type === 'GOLD' ? 'text-yellow-300' : 'text-green-400';
+                    showFloatingText(hole, `+${gainedPoints}`, colorClass);
+                }
+
+                // Hit animation effect
+                moleObj.el.classList.add('hit-effect');
+                setTimeout(() => {
+                    moleObj.el.classList.remove('hit-effect');
+                    retractMole(key);
+                }, 150);
+
+            } else {
+                // Missed Hit (Empty Hole)
+                playSound('miss');
+                combo = 0;
+                showFloatingText(hole, 'MISS', 'text-gray-400');
+            }
+
+            updateUI();
+        }
+
+        // Show Floating Score/Miss Text Effect
+        function showFloatingText(container, text, colorClass) {
+            const el = document.createElement('div');
+            el.className = `float-text ${colorClass}`;
+            el.innerText = text;
+            el.style.left = '50%';
+            el.style.top = '30%';
+            el.style.transform = 'translate(-50%, -50%)';
+            container.appendChild(el);
+
+            setTimeout(() => {
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }, 600);
+        }
+
+        // Update UI Displays
+        function updateUI() {
+            document.getElementById('score-display').innerText = score.toLocaleString();
+            document.getElementById('combo-display').innerText = combo;
+
+            // Combo Bar Width (Max 20 Combo)
+            const comboPercent = Math.min(100, (combo / 20) * 100);
+            document.getElementById('combo-bar').style.width = `${comboPercent}%`;
+
+            // Update Hearts
+            const heartsHtml = Array(3).fill(0).map((_, i) => {
+                if (i < lives) return '<i class="fa-solid fa-heart text-red-500"></i>';
+                return '<i class="fa-solid fa-heart text-gray-700"></i>';
+            }).join('');
+            document.getElementById('lives-display').innerHTML = heartsHtml;
+        }
+
+        // End Game
+        function endGame() {
+            isPlaying = false;
+            survivedTime = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+
+            // Clear all active timers
+            Object.keys(moleTimers).forEach(k => clearTimeout(moleTimers[k]));
+
+            // Retract all remaining moles
+            KEY_PADS.forEach(key => retractMole(key));
+
+            playSound('over');
+
+            // Re-enable Start Button
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            // Calculate Highscore
+            let isNewRecord = false;
+            if (score > highscore) {
+                highscore = score;
+                localStorage.setItem('whack_mole_highscore', highscore);
+                document.getElementById('highscore-display').innerText = highscore;
+                isNewRecord = true;
+                confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+            }
+
+            // Calculate Accuracy
+            const accuracy = totalClicks > 0 ? Math.round((totalHits / totalClicks) * 100) : 0;
+
+            // Update Modal Stats
+            document.getElementById('final-score').innerText = score.toLocaleString();
+            document.getElementById('survived-time').innerText = `${survivedTime}초`;
+            document.getElementById('max-combo').innerText = `${maxCombo}x`;
+            document.getElementById('accuracy-display').innerText = `${accuracy}%`;
+
+            const newRecordTag = document.getElementById('new-record-tag');
+            if (isNewRecord) {
+                newRecordTag.classList.remove('hidden');
+            } else {
+                newRecordTag.classList.add('hidden');
+            }
+
+            // Show Modal
+            const modal = document.getElementById('game-over-modal');
+            const modalContent = document.getElementById('modal-content');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('game-over-modal');
+            const modalContent = document.getElementById('modal-content');
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+    </script>
+</body>
+</html>

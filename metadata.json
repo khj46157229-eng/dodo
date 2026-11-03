@@ -1,0 +1,6 @@
+{
+  "name": "초스피드 두더지 잡기",
+  "description": "숫자 키패드(789/456/123) 및 터치로 즐기는 초스피드 두더지 잡기 액션 아케이드 게임",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
